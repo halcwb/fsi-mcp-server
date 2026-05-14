@@ -44,10 +44,13 @@ cd fsi-mcp-server
 dotnet pack server/fsi-mcp-server.fsproj -c Release
 dotnet tool install -g --add-source ./nupkg FsiMcp
 
-# Run (binds http://0.0.0.0:5020)
+# Run as HTTP server (binds http://0.0.0.0:5020)
 fsi-mcp
 
-# Pass-through fsi.exe args
+# Run as stdio MCP server (for clients that auto-spawn the process; no HTTP listener)
+fsi-mcp --stdio
+
+# Pass-through fsi.exe args (works in both modes)
 fsi-mcp --nologo --define:DEBUG --load:setup.fsx
 
 # Update / uninstall
@@ -179,16 +182,38 @@ Replace Rider's built-in F# Interactive with FSI Server for seamless AI integrat
 
 #### Setting Up Claude Code Integration
 
-Install the mcp server:
+If installed as the global tool (recommended), register stdio so Claude Code auto-spawns it per session — no need to start the server first:
 
-native:
 ```shell
- claude mcp add --transport sse fsi-server  http://localhost:5020/sse
+claude mcp add -s user fsi-mcp -- fsi-mcp --stdio --nologo
+```
+
+Stdio mode disables the hybrid console-REPL bridge (stdin is owned by JSON-RPC) and silences stdout-bound FSI echoing; everything still flows through the MCP tools and the event log.
+
+Alternatively, if you're already running fsi-mcp as a long-lived HTTP server, register the SSE endpoint:
+
+```shell
+claude mcp add --transport sse -s user fsi-mcp http://localhost:5020/sse
 ```
 
 This creates a seamless experience where you can work with F# interactively while Claude assists by executing code, running tests, and maintaining collaborative scripts.
 
 #### Setting Up Claude Desktop Integration
+
+Stdio (recommended — Claude Desktop launches the server itself):
+
+```json
+{
+  "mcpServers": {
+    "fsi-mcp": {
+      "command": "fsi-mcp",
+      "args": ["--stdio", "--nologo"]
+    }
+  }
+}
+```
+
+HTTP/SSE bridge (for an already-running fsi-mcp HTTP server):
 
 ```json
 {
@@ -201,6 +226,7 @@ This creates a seamless experience where you can work with F# interactively whil
       ]
     }
   }
+}
 ```
 
 #### Setting Up Github Copilot Integration

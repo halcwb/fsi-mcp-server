@@ -19,9 +19,10 @@ type FsiEvent = {
     SessionId: string
 }
 
-type FsiService(logger: ILogger<FsiService>, sessionId: string) =
+type FsiService(logger: ILogger<FsiService>, sessionId: string, ?isStdio: bool) =
     let mutable fsiProcess: Process option = None
     let eventQueue = ConcurrentQueue<FsiEvent>()
+    let isStdio = defaultArg isStdio false
 
     let getSourceName = function
         | Console -> "console"
@@ -69,7 +70,7 @@ type FsiService(logger: ILogger<FsiService>, sessionId: string) =
                 while not proc.HasExited do
                     let! line = proc.StandardOutput.ReadLineAsync() |> Async.AwaitTask
                     if not (isNull line) then
-                        Console.WriteLine(line)  // Pipe FSI output to console as normal                        
+                        if not isStdio then Console.WriteLine(line)  // Pipe FSI output to console (suppressed in stdio MCP mode to keep stdout clean for JSON-RPC)
                         createFsiEvent "output" "fsi" line |> addEvent //Fill event queue so MCP clients can follow along
             with
             | ex -> logger.LogError($"Output monitoring error: %s{ex.Message}")
@@ -82,8 +83,9 @@ type FsiService(logger: ILogger<FsiService>, sessionId: string) =
                     let! line = proc.StandardError.ReadLineAsync() |> Async.AwaitTask
                     if not (isNull line) then
                         logger.LogDebug("FSI-STDERR: {Line}", line)
-                        Console.WriteLine $"ERROR: %s{line}"
-                        Console.Out.Flush()  // Flush immediately for redirected stdout (Rider)
+                        if not isStdio then
+                            Console.WriteLine $"ERROR: %s{line}"
+                            Console.Out.Flush()  // Flush immediately for redirected stdout (Rider)
 
                         // Add error event to queue
                         let event = createFsiEvent "error" "fsi" line
@@ -103,7 +105,7 @@ type FsiService(logger: ILogger<FsiService>, sessionId: string) =
         logger.LogDebug("FSI-INPUT: SendToFsi from {Source}: {Code}", sourceName, code.Trim())
         match fsiProcess with
         | Some proc when not proc.HasExited ->
-            if source <> Console then //Don't pipe CLI input back to CLI.
+            if source <> Console && not isStdio then //Don't pipe CLI input back to CLI; suppressed in stdio MCP mode.
                 Console.WriteLine $"(%s{sourceName})> %s{code.Trim()}"
                 Console.Out.Flush()  // Flush immediately for redirected stdout (Rider)
 

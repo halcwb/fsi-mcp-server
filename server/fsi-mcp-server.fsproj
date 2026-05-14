@@ -6,7 +6,7 @@
         <RootNamespace>fsi_server</RootNamespace>
         <IsPackable>true</IsPackable>
         <PackageId>FsiMcp</PackageId>
-        <Version>0.1.0</Version>
+        <Version>0.2.0</Version>
         <PackAsTool>true</PackAsTool>
         <ToolCommandName>fsi-mcp</ToolCommandName>
         <PackageOutputPath>../nupkg</PackageOutputPath>

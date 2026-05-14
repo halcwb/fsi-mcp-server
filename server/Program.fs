@@ -7,6 +7,7 @@ open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Serilog
 
@@ -135,25 +136,66 @@ let createApp (args: string[]) (sessionId: string) =
     
     app, Task.WhenAll [| prodTask; consTask |]
 
+let runStdio (args: string[]) (sessionId: string) =
+    // Stdio MCP transport owns Console.In/Out for JSON-RPC.
+    // Use Generic Host (no ASP.NET, no console banner) and route logging only to the Serilog file sink.
+    let builder = Host.CreateApplicationBuilder()
+
+    builder.Logging.ClearProviders() |> ignore
+    builder.Logging.AddSerilog(Log.Logger) |> ignore
+
+    builder.Services.AddSingleton<FsiService.FsiService>(fun serviceProvider ->
+        let logger = serviceProvider.GetRequiredService<ILogger<FsiService.FsiService>>()
+        new FsiService.FsiService(logger, sessionId, true)
+    ) |> ignore
+
+    builder.Services.AddSingleton<FsiMcpTools.FsiTools>(fun serviceProvider ->
+        let fsiService = serviceProvider.GetRequiredService<FsiService.FsiService>()
+        let logger = serviceProvider.GetRequiredService<ILogger<FsiMcpTools.FsiTools>>()
+        new FsiMcpTools.FsiTools(fsiService, logger)
+    ) |> ignore
+
+    builder.Services
+        .AddMcpServer()
+        .WithStdioServerTransport()
+        .WithTools<FsiMcpTools.FsiTools>()
+    |> ignore
+
+    let host = builder.Build()
+    let fsiService = host.Services.GetRequiredService<FsiService.FsiService>()
+    fsiService.StartFsi(args) |> ignore
+
+    let lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>()
+    lifetime.ApplicationStopping.Register(fun () -> fsiService.Cleanup()) |> ignore
+
+    host.Run()
+
 [<EntryPoint>]
 let main args =
+    // Recognise --stdio anywhere in argv; strip it before passing through to FSI.
+    let stdioMode = args |> Array.contains "--stdio"
+    let args = args |> Array.filter (fun a -> a <> "--stdio")
+
     // Generate session ID early for Serilog configuration
     let sessionId = Guid.NewGuid().ToString("N")[..7]
-    // OS specific temp path    
+    // OS specific temp path
     let tempPath = IO.Path.GetTempPath()
     let logFilePath = IO.Path.Combine(tempPath, $"fsi-mcp-debugging-{sessionId}.log")
-    // Configure Serilog early - before any other logging
+    // Configure Serilog early - file sink only; safe to use in stdio mode (no stdout writes).
     Log.Logger <- LoggerConfiguration()
         .MinimumLevel.Debug()
         .WriteTo.File(logFilePath)
         .CreateLogger()
-    
-    Log.Information("FSI MCP Server starting with session ID: {SessionId}", sessionId)
-    
+
+    Log.Information("FSI MCP Server starting (stdio={Stdio}) session={SessionId}", stdioMode, sessionId)
+
     try
-        let (app, consoleTask) = createApp args sessionId
-        let appTask = app.RunAsync()
-        Task.WaitAll([| appTask; consoleTask |])
+        if stdioMode then
+            runStdio args sessionId
+        else
+            let (app, consoleTask) = createApp args sessionId
+            let appTask = app.RunAsync()
+            Task.WaitAll([| appTask; consoleTask |])
         0
     finally
         Log.CloseAndFlush()
