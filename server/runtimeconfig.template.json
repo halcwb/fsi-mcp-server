@@ -1,0 +1,6 @@
+{
+  "frameworks": [
+    { "name": "Microsoft.NETCore.App", "version": "9.0.0" },
+    { "name": "Microsoft.AspNetCore.App", "version": "9.0.0" }
+  ]
+}

@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec dotnet /Users/halcwb/Development/halcwb/forks/fsi-mcp-server/server/bin/Debug/net9.0/fsi-mcp-server.dll "$@"

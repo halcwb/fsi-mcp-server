@@ -8,6 +8,7 @@ A drop-in replacement for `fsi.exe` that adds MCP capabilities to F# Interactive
 
 ## Table of Contents
 
+- [Install as a .NET Global Tool](#install-as-a-net-global-tool)
 - [Why FSI MCP Server?](#why-fsi-mcp-server)
 - [Overview](#overview)
 - [Quick Start](#quick-start)
@@ -28,6 +29,34 @@ A drop-in replacement for `fsi.exe` that adds MCP capabilities to F# Interactive
   - [CLI Pass-through](#cli-pass-through)
 - [Requirements](#requirements)
 - [License](#license)
+
+## Install as a .NET Global Tool
+
+`fsi-mcp-server` packs as a .NET global tool (`PackageId: FsiMcp`, command: `fsi-mcp`).
+
+```bash
+# Option A - install from nuget.org (once published)
+dotnet tool install -g FsiMcp
+
+# Option B - install from a local clone of this repo
+git clone https://github.com/halcwb/fsi-mcp-server
+cd fsi-mcp-server
+dotnet pack server/fsi-mcp-server.fsproj -c Release
+dotnet tool install -g --add-source ./nupkg FsiMcp
+
+# Run (binds http://0.0.0.0:5020)
+fsi-mcp
+
+# Pass-through fsi.exe args
+fsi-mcp --nologo --define:DEBUG --load:setup.fsx
+
+# Update / uninstall
+dotnet tool update    -g FsiMcp                       # nuget.org
+dotnet tool update    -g --add-source ./nupkg FsiMcp  # local clone
+dotnet tool uninstall -g FsiMcp
+```
+
+The wrapper scripts in the repo root (`fsi-mcp`, `start-server.sh`) are dev-only and not needed once installed globally.
 
 ## Why FSI MCP Server?
 
